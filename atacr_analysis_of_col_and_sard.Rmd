@@ -1,0 +1,158 @@
+---
+title: "atacr_analysis_of_col_and_sard"
+author: "Ram Krishna Shrestha"
+date: "17 July 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## ATAC data analysis of col(WT) and gh(sard) samples
+
+```{r echo =TRUE}
+library(atacr)
+```
+
+## Setting parameters
+
+```{r echo = TRUE}
+my_params = make_params(paired_map = TRUE, minq = 30, dedup = TRUE)
+```
+
+## Generating Counts
+
+By default, the window size is 50. This can be set as desired using the option "width". Using the above, parameter set, the counts of reads in the windows within bait and non-bait regions is done as following:
+
+```{r echo=TRUE}
+counts <- make_counts("data/bait_regions.gff", "data/sample_treatment_mapping.csv", filter_params = my_params, is_rnaseq = FALSE, gene_id_col = "NAME", width = 50)
+```
+
+## Save the counts
+```{r echo=TRUE}
+saveRDS(counts, file="results/my_output_file.rds")
+```
+
+## Summarising the count data
+```{r echo = TRUE}
+summary(counts)
+```
+
+Below is the explanation of the summary
+1) The treatments line gives the classes of data that atacR understands
+2) The samples line gives the samples and replicate information
+3) The Bait regions used line gives the bait region count
+4) The Total Windows line tells how many windows those baits are divided into.
+5) The On/Off target read counts section tells how many reads are in the windows (on_target) and how many are outside (off_target) for each sample
+6) The Quantiles section shows the read count at each quantile for each sample in the windows in bait regions or non-bait regions
+7) The Read depths section shows the on_target and off_target region average read depths.
+
+
+## Plot the counts
+
+A coverage threshold plot can reveal the number of windows that have coverage lower than a given value.
+
+```{r echo  = TRUE}
+windows_below_coverage_threshold_plot(counts)
+```
+
+PCA plots can be used to check sample reproducibility. We have replicates of each sample. With a PCA plot, the similarity/dissimilarity of the replicates can be examined.
+
+```{r echo = TRUE}
+library(ggplot2)
+library(RColorBrewer)
+test_sample_pca_plot <- function(data, which = "bait_windows") {
+
+  sample_matrix <- SummarizedExperiment::assay(data[[which]])
+  df_pca <- prcomp(sample_matrix)
+  df_out_r <- as.data.frame(df_pca$rotation)
+  df_out_r$sample <- row.names(df_out_r)
+  p <- ggplot2::ggplot(df_out_r) +
+    ggplot2::aes(x = PC1,y = PC2, color = sample ) +
+    ggplot2::geom_point(aes(shape=sample, size=5)) +
+    ggthemes::scale_color_ptol()  +
+    ggthemes::scale_fill_ptol() +
+    ggplot2::theme_minimal() + scale_colour_manual(values=rep(brewer.pal(9,"Set1"),times=3)) + scale_shape_manual(values=rep(c(15,16,17,18,19,20,21,22,23),each=3)) +
+    ggplot2::theme(legend.position = "bottom")
+  return(p)
+
+}
+
+test_sample_pca_plot(counts)
+```
+
+MA plots
+
+```{r echo = TRUE}
+ma_plot(counts)
+```
+
+## Goodness of Fit (GoF) Normalisation
+
+First step to run the GoF code is to find the most stable windows across the samples to use to normalise.
+
+```{r echo = TRUE}
+auto_controls <- find_controls_by_GoF(counts)
+plot_GoF(counts, controls = auto_controls)
+```
+
+Spikier mean Goodness of Fit. The Non-control data has a long tail distribution so the difference is quite pronounced. So we can use now generate the normalisation factors and apply them. We’ll save the resulting information to a new slot in the counts object. Then we’ll plot the pre- and post- normalised data to see the effects of the normalisation
+
+```{r echo = TRUE}
+gof_norm_factors <- get_GoF_factors(counts)
+gof_normalised_counts <- scale_factor_normalise(counts,  scaling_factors = gof_norm_factors)
+counts$normalised_counts <- gof_normalised_counts
+plot_counts(counts)
+```
+
+```{r echo = TRUE}
+plot_counts(counts, which = "normalised_counts")
+```
+
+```{r echo = TRUE}
+ma_plot(counts)
+```
+
+```{r echo = TRUE}
+ma_plot(counts, which = "normalised_counts")
+```
+
+## Differential Window Count
+
+```{r echo = TRUE}
+edgeRexact_result <-  edgeR_exact(counts, which = "normalised_counts", treatment_a =  "col_untreated", treatment_b = "col_mock", remove_zeros = FALSE)
+
+bootstrap_result <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_untreated", treatment_b = "col_mock", iterations = 10)
+
+bayesfactor_result <- estimate_bayes_factor(counts, treatment_a = "col_untreated", treatment_b =  "col_mock", which = "normalised_counts")
+
+```
+
+```{r echo  = TRUE}
+head(bootstrap_result)
+```
+
+```{r echo = TRUE}
+head(bayesfactor_result)
+```
+
+```{r echo = TRUE}
+head(edgeRexact_result)
+```
+
+```{r echo  = TRUE}
+bf_multi <- estimate_bayes_factor_multiclass(counts, "col_mock", factor = 0.5, which = "normalised_counts")
+
+head(bf_multi)
+```
+
+```{r echo  = TRUE}
+fdr_multi <- estimate_fdr_multiclass(counts, "col_mock", fdr_level = 0.05, which = "normalised_counts")
+
+head(fdr_multi)
+```
+
+```{r echo = TRUE}
+edgeR_multiclass(counts,"col_mock", remove_zeros = FALSE, which = "normalised_counts")
+```
+
