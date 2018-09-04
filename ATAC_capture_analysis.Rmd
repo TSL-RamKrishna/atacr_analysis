@@ -68,216 +68,64 @@ sample_pca_plot(counts)
 ```
 
 
+# Control gene Normalisation
 
-## Goodness of Fit (GoF) Normalisation
+## Finding and applying internal scaling factor using Goodness of Fit (GoF) Normalisation
 
-First step to run the GoF code is to find the most stable windows across the samples to use to normalise.
+```{r}
+gof_norm_factors <- get_GoF_factors(counts)
+gof_norm_factors
+gof_normalised_counts <- scale_factor_normalise(counts, scaling_factors = gof_norm_factors)
+
+
+counts$normalised_counts <- gof_normalised_counts
+
+plot_counts(counts, which = "normalised_counts")
+```
+
+
+Plotting the distribution of ‘control’ windows against the rest using
 
 ```{r echo = TRUE}
+
 auto_controls <- find_controls_by_GoF(counts)
 plot_GoF(counts, controls = auto_controls)
 ```
 
 Spikier mean Goodness of Fit. The Non-control data has a long tail distribution so the difference is quite pronounced. So we can use now generate the normalisation factors and apply them. We’ll save the resulting information to a new slot in the counts object. Then we’ll plot the pre- and post- normalised data to see the effects of the normalisation
 
-```{r echo = TRUE}
-gof_norm_factors <- get_GoF_factors(counts)
-gof_normalised_counts <- scale_factor_normalise(counts,  scaling_factors = gof_norm_factors)
-counts$normalised_counts <- gof_normalised_counts
-plot_counts(counts)
-```
 
 
-```{r echo = TRUE}
-plot_counts(counts, which = "normalised_counts")
-```
+## Differential expressed windows
 
-
-
-## Differential Window Count
-
-```{r echo = TRUE}
-edgeRexact_result_col_a4_mock_normalised <-  edgeR_exact(counts, which = "normalised_counts", treatment_a =  "col_a4_4h", treatment_b = "col_mock", remove_zeros = TRUE)
-bootstrap_result_col_a4_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_a4_4h", treatment_b = "col_mock", iterations = 10)
-bayesfactor_result_col_a4_mock_normalised <- estimate_bayes_factor(counts, treatment_a = "col_a4_4h", treatment_b =  "col_mock", which = "normalised_counts")
-edgeRexact_result_col_kv_mock_normalised <-  edgeR_exact(counts, which = "normalised_counts", treatment_a =  "col_kv_4h", treatment_b = "col_mock", remove_zeros = TRUE)
-bootstrap_result_col_kv_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_kv_4h", treatment_b = "col_mock", iterations = 10)
-bayesfactor_result_col_kv_mock_normalised <- estimate_bayes_factor(counts, treatment_a = "col_kv_4h", treatment_b =  "col_mock", which = "normalised_counts")
-
-```
-
-```{r echo = TRUE}
-edgeRexact_result_col_a4_mock <-  edgeR_exact(counts, which = "bait_windows", treatment_a =  "col_a4_4h", treatment_b = "col_mock", remove_zeros = TRUE)
-bootstrap_result_col_a4_mock <- estimate_fdr(counts, which = "bait_windows", treatment_a =  "col_a4_4h", treatment_b = "col_mock")
-bayesfactor_result_col_a4_mock <- estimate_bayes_factor(counts, treatment_a = "col_a4_4h", treatment_b =  "col_mock", which = "bait_windows")
-edgeRexact_result_col_kv_mock <-  edgeR_exact(counts, which = "bait_windows", treatment_a =  "col_kv_4h", treatment_b = "col_mock", remove_zeros = TRUE)
-bootstrap_result_col_kv_mock <- estimate_fdr(counts, which = "bait_windows", treatment_a =  "col_kv_4h", treatment_b = "col_mock")
-bayesfactor_result_col_kv_mock <- estimate_bayes_factor(counts, treatment_a = "col_kv_4h", treatment_b =  "col_mock", which = "bait_windows")
-```
-
-All the results above are obtained from ATACR package. However, Pingtao would like to generate more plots based on data on reads on the windows or simply window counts. He would like to compare the window counts on a4_4h vs mock and kv_4h vs mock.
-
-The function below take a dataframe (anyone generate above) and a gene start and end positions. It returns another dataframe after reshaping the data on columns to rows.
-```{r echo = TRUE}
-gene_windowCount_plot <- function(df, gene_start, gene_end){
-  window_counts <- df %>% dplyr::select(window,mean_col_a4_4h, mean_col_mock) %>%dplyr::mutate(mean_col_kv_4h = df$mean_col_kv_4h) %>% separate(col = window, into=c("Chr", "window"), sep=":", remove=TRUE) %>% separate(col=window, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% filter(Chr=="Chr4", Window>=gene_start | Window>gene-start+50, windowmax<=gene_end | windowmax <gene_end+50)
-  gene_windowcount <- reshape::melt(window_counts, measure.vars=c("mean_col_a4_4h", "mean_col_mock", "mean_col_kv_4h")) %>% dplyr::rename(Samples = variable, Count=value)
-  return(gene_windowcount)
-}
-```
-
-The function below joins two dataframe using full_join.
-```{r echo = TRUE}
-compareLogFoldChange <- function(df1, df2){
-  logchange_1 <- df1 %>% dplyr::select(window, log2_fold_change)
-  logchange_2 <- df2 %>% dplyr::select(window, log2_fold_change)
-  logchange <- dplyr::full_join(logchange_1,logchange_2, by="window")
-  return(logchange)
-}
-```
-
-The function below selects all the rows with windows between the given gene chromosome number, genomic start and end positions.
-
-```{r echo = TRUE}
-select_gene_windows <- function(chr, gene_start, gene_end, windowsize){
-  selected_windows <- compareLogFoldChange(bayesfactor_result_col_a4_mock_normalised, bayesfactor_result_col_kv_mock_normalised) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% filter(Chr==chr, Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize)
-  return(selected_windows)
-}
-```
-
-
-Plotting the mean window counts for col_a4_4h vs col_mock for gene At1G73805
-```{r echo =TRUE}
-AT1G73805 <- select_gene_windows("Chr1", 27744790, 27749248, 50) %>% arrange(Window) %>% dplyr::rename(col_a4_4h_vs_mock="log2_fold_change.x", col_kv_4h_vs_mock="log2_fold_change.y")  %>% reshape::melt(measure.var=c("col_a4_4h_vs_mock", "col_kv_4h_vs_mock")) %>% rename(compare="variable", log2_fold_change="value")
-ggplot(AT1G73805, aes(x=Window, y=log2_fold_change, color=compare)) + geom_col(position = "stack")  + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-
-The X axis shows the genomic position of the start of a window.
-
-Plotting the mean window counts for col_a4_4h vs col_mock for gene At4G05320.
-
-```{r echo=TRUE}
-AT4G05320 <- select_gene_windows("Chr4", 2717977, 2720308, 50) %>% arrange(Window) %>% dplyr::rename(col_a4_4h_vs_mock="log2_fold_change.x", col_kv_4h_vs_mock="log2_fold_change.y")  %>% reshape::melt(measure.var=c("col_a4_4h_vs_mock", "col_kv_4h_vs_mock")) %>% rename(compare="variable", log2_fold_change="value")
-ggplot(AT4G05320, aes(x=Window, y=log2_fold_change, color=compare)) + geom_col(position = "stack")  + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-The X axis show the gnomics position of the start of a window
-
-26 July 2018
-Having seen the plots above, Pingtao would like to view the plots for col_a4_4h vs col_mock and col_kv_4h vs col_mock for the selected genes (i.e. AT1G73805 and AT4G05320) using the log2 fold change data.
-
-
-The code below takes mean window count of each replicates for both col_a4 and col_mock, divides each window count by its column mean and then takes the mean of each replicates for col_a4 and col_mock. Finally only the window and the mean columns from replicates are selected for col_a4 and col_mock
-
-```{r echo =TRUE}
-a4_mock_rep_windowcount_normalised <- bayesfactor_result_col_a4_mock %>% dplyr::mutate(normalised_col_a4_rep1=bayesfactor_result_col_a4_mock$col_a4_4h_rep1/mean(bayesfactor_result_col_a4_mock$col_a4_4h_rep1), normalised_col_a4_rep2=bayesfactor_result_col_a4_mock$col_a4_4h_rep2/mean(bayesfactor_result_col_a4_mock$col_a4_4h_rep2), normalised_col_a4_rep3=bayesfactor_result_col_a4_mock$col_a4_4h_rep3/mean(bayesfactor_result_col_a4_mock$col_a4_4h_rep3)) %>% dplyr::mutate(col_a4_4h=(normalised_col_a4_rep1 + normalised_col_a4_rep2 + normalised_col_a4_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=bayesfactor_result_col_a4_mock$col_mock_rep1/mean(bayesfactor_result_col_a4_mock$col_mock_rep1), normalised_mock_rep2=bayesfactor_result_col_a4_mock$col_mock_rep2/mean(bayesfactor_result_col_a4_mock$col_mock_rep2), normalised_mock_rep3=bayesfactor_result_col_a4_mock$col_mock_rep3/mean(bayesfactor_result_col_a4_mock$col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(window, col_a4_4h, col_mock)
-
-
- 
-kv_mock_rep_windowcount_normalised <- bayesfactor_result_col_kv_mock %>% dplyr::mutate(normalised_col_kv_rep1=bayesfactor_result_col_kv_mock$col_kv_4h_rep1/mean(bayesfactor_result_col_kv_mock$col_kv_4h_rep1), normalised_col_kv_rep2=bayesfactor_result_col_kv_mock$col_kv_4h_rep2/mean(bayesfactor_result_col_kv_mock$col_kv_4h_rep2), normalised_col_kv_rep3=bayesfactor_result_col_kv_mock$col_kv_4h_rep3/mean(bayesfactor_result_col_kv_mock$col_kv_4h_rep3)) %>% dplyr::mutate(col_kv_4h=(normalised_col_kv_rep1 + normalised_col_kv_rep2 + normalised_col_kv_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=bayesfactor_result_col_kv_mock$col_mock_rep1/mean(bayesfactor_result_col_kv_mock$col_mock_rep1), normalised_mock_rep2=bayesfactor_result_col_kv_mock$col_mock_rep2/mean(bayesfactor_result_col_kv_mock$col_mock_rep2), normalised_mock_rep3=bayesfactor_result_col_kv_mock$col_mock_rep3/mean(bayesfactor_result_col_kv_mock$col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(window, col_kv_4h, col_mock)
-
-
-
-```
-
-Let's get the ratio col_a4_4h/col_mock and col_kv_4h/col_mock and left join to bring the ratios in one table
-```{r echo = TRUE}
-
-a4_mock_rep_windowcount_normalised_ratio <- a4_mock_rep_windowcount_normalised %>% dplyr::mutate(a4_mock_ratio = col_a4_4h/col_mock) %>%  separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE)
-
-kv_mock_rep_windowcount_normalised_ratio <-  kv_mock_rep_windowcount_normalised %>% dplyr::mutate(kv_mock_ratio=col_kv_4h/col_mock) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE)
-
-a4_kv_mock_ratios <- dplyr::left_join(a4_mock_rep_windowcount_normalised_ratio, kv_mock_rep_windowcount_normalised_ratio) %>% dplyr::select(Chr, Window, windowmax, a4_mock_ratio, kv_mock_ratio)
-a4_kv_mock_ratios_reshpaed <- a4_kv_mock_ratios %>% reshape::melt(measure.vars=c("a4_mock_ratio", "kv_mock_ratio")) %>% dplyr::rename(Samples=variable, Ratios=value)
-```
-
-
-
-
-Select only the window counts for the gene AT1G73805 (chr1, 27744790, 27749248) and plot
-
-```{r echo = TRUE}
-gene_start=27744790
-gene_end=27749248
-windowsize=50
-AT1G73805 <- a4_kv_mock_ratios_reshpaed %>% dplyr::filter(Chr=="Chr1", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize)
-ggplot(AT1G73805, aes(Window, Ratios, color=Samples)) + geom_col(position="stack") + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-
-The above plot using points and grouped by lines.
-```{r echo = TRUE}
-ggplot(AT1G73805, aes(Window, Ratios, color=Samples)) + geom_point(size=3) + geom_line(data=AT1G73805, aes(group=Samples)) + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, color="darkblue"))
-```
-
-Select only the window counts for the gene AT4G05320(chr4, 2717977, 2720308) and plot
-
-```{r echo = TRUE}
-gene_start=2717977
-gene_end=2720308
-windowsize=50
-AT4G05320 <- a4_kv_mock_ratios_reshpaed %>% dplyr::filter(Chr=="Chr4", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize)
-ggplot(AT4G05320, aes(Window, Ratios, color=Samples)) + geom_col(position="stack") + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-The same plot with points and grouped by lines.
-```{r echo = TRUE}
-ggplot(AT4G05320, aes(Window, Ratios, color=Samples)) + geom_point(size=3) + geom_line(data=AT4G05320, aes(group=Samples)) + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-
-
-The a4_mock data is expected to be below kv_mock. But we don't see that. This might be due to the reason that the mean is calculated over all the 52 baits regions/genes. Now let's select only the windows within the gene region first and then get the mean.
-
-```{r echo = TRUE}
-gene_start=27744790
-gene_end=27749248
-windowsize=50
-
-data_a4_mock <- bayesfactor_result_col_a4_mock %>% dplyr::select(window, col_a4_4h_rep1, col_a4_4h_rep2 ,col_a4_4h_rep3, col_mock_rep1 ,col_mock_rep2, col_mock_rep3) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% dplyr::filter(Chr=="Chr1", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize) %>% dplyr::mutate(normalised_col_a4_rep1=col_a4_4h_rep1/mean(col_a4_4h_rep1), normalised_col_a4_rep2=col_a4_4h_rep2/mean(col_a4_4h_rep2), normalised_col_a4_rep3=col_a4_4h_rep3/mean(col_a4_4h_rep3)) %>% dplyr::mutate(col_a4_4h=(normalised_col_a4_rep1 + normalised_col_a4_rep2 + normalised_col_a4_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=col_mock_rep1/mean(col_mock_rep1), normalised_mock_rep2=col_mock_rep2/mean(col_mock_rep2), normalised_mock_rep3=col_mock_rep3/mean(col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(Chr,Window, windowmax, col_a4_4h, col_mock)
-
-data_kv_mock <- bayesfactor_result_col_kv_mock %>% dplyr::select(window, col_kv_4h_rep1, col_kv_4h_rep2, col_kv_4h_rep3, col_mock_rep1, col_mock_rep2, col_mock_rep3) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% dplyr::filter(Chr=="Chr1", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize) %>% dplyr::mutate(normalised_col_kv_rep1=col_kv_4h_rep1/mean(col_kv_4h_rep1), normalised_col_kv_rep2=col_kv_4h_rep2/mean(col_kv_4h_rep2), normalised_col_kv_rep3=col_kv_4h_rep3/mean(col_kv_4h_rep3)) %>% dplyr::mutate(col_kv_4h=(normalised_col_kv_rep1 + normalised_col_kv_rep2 + normalised_col_kv_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=col_mock_rep1/mean(col_mock_rep1), normalised_mock_rep2=col_mock_rep2/mean(col_mock_rep2), normalised_mock_rep3=col_mock_rep3/mean(col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(Chr,Window, windowmax, col_kv_4h, col_mock)
-```
-
-Let's plot the mean values for col_a4, col_kv and col_mock per window
-
-```{r echo = TRUE}
-AT1G73805 <- dplyr::left_join(data_a4_mock, data_kv_mock) %>% mutate(col_a4_mock_ratio = col_a4_4h/col_mock, col_kv_mock_ratio = col_kv_4h/col_mock) %>% reshape::melt(measure.vars=c("col_a4_4h", "col_mock", "col_kv_4h")) %>% rename(Samples=variable, Ratio=value)
-ggplot(AT1G73805, aes(Window, Ratio, color=Samples)) + geom_point(size=3) + geom_line(data=AT1G73805, aes(group=Samples))  + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-
-Now, let's plot the ratio col_a4/col_mock, col_kv/col_mock
+### Bootstrap t-test
 
 ```{r echo = TRUE}
 
-AT1G73805 <- dplyr::left_join(data_a4_mock, data_kv_mock) %>% mutate(col_a4_mock_ratio = col_a4_4h/col_mock, col_kv_mock_ratio = col_kv_4h/col_mock) %>% select(Chr, Window, windowmax, col_a4_mock_ratio, col_kv_mock_ratio) %>% reshape::melt(measure.vars=c("col_a4_mock_ratio", "col_kv_mock_ratio")) %>% dplyr::rename(Samples=variable, Ratios=value)
+#bootstrap_result_col_a4_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_a4_4h", treatment_b = "col_mock", iterations = 100000, fdr_level = 0.01)
+#head(bootstrap_result_col_a4_mock_normalised)
 
-ggplot(AT1G73805, aes(Window, Ratios, color=Samples)) + geom_point(size=3) + geom_line(data=AT1G73805, aes(group=Samples)) + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
+bootstrap_result_of_col_normalised_multiclass <- estimate_fdr_multiclass(counts, which = "normalised_counts", common_control = "col_mock", iterations = 100, fdr_level = 0.01)
+head(bootstrap_result_of_col_normalised_multiclass)
+
+# Writing data to a file
+write.csv(bootstrap_result_of_col_normalised_multiclass, file="results/bootstrap_result_col_a4_mock_normalised_multiclass.csv", row.names = TRUE)
+#bayesfactor_result_col_a4_mock_normalised <- estimate_bayes_factor(counts, treatment_a = "col_a4_4h", treatment_b =  "col_mock", which = "normalised_counts", factor = 2.0)
+#head(bayesfactor_result_col_a4_mock_normalised)
+```
+Here a = treatment sample, b = control sample
+
+### Bayes Factor Analysis
+
+```{r}
+bayesfactor_result_of_col_normalised_multiclass <- estimate_bayes_factor_multiclass(counts, common_control = "col_mock",  factor = 2.0, which = "normalised_counts")
+head(bayesfactor_result_of_col_normalised_multiclass)
+
+#Writing data to a file
+write.csv(bayesfactor_result_of_col_normalised_multiclass, file="results/bayesfactor_result_of_col_normalised_multiclass.csv", row.names = TRUE)
+#bootstrap_result_col_kv_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_kv_4h", treatment_b = "col_mock", iterations = 100000, fdr_level = 0.01)
+#head(bootstrap_result_col_kv_mock_normalised)
 ```
 
+Here, a = treatment sample, b = control sample
 
-Repeating the process for another gene AT4G05320.
-
-```{r echo = TRUE}
-gene_start=2717977
-gene_end=2720308
-windowsize=50
-
-data_a4_mock <- bayesfactor_result_col_a4_mock %>% dplyr::select(window, col_a4_4h_rep1, col_a4_4h_rep2 ,col_a4_4h_rep3, col_mock_rep1 ,col_mock_rep2, col_mock_rep3) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% dplyr::filter(Chr=="Chr4", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize) %>% dplyr::mutate(normalised_col_a4_rep1=col_a4_4h_rep1/mean(col_a4_4h_rep1), normalised_col_a4_rep2=col_a4_4h_rep2/mean(col_a4_4h_rep2), normalised_col_a4_rep3=col_a4_4h_rep3/mean(col_a4_4h_rep3)) %>% dplyr::mutate(col_a4_4h=(normalised_col_a4_rep1 + normalised_col_a4_rep2 + normalised_col_a4_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=col_mock_rep1/mean(col_mock_rep1), normalised_mock_rep2=col_mock_rep2/mean(col_mock_rep2), normalised_mock_rep3=col_mock_rep3/mean(col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(Chr,Window, windowmax, col_a4_4h, col_mock)
-
-data_kv_mock <- bayesfactor_result_col_kv_mock %>% dplyr::select(window, col_kv_4h_rep1, col_kv_4h_rep2, col_kv_4h_rep3, col_mock_rep1, col_mock_rep2, col_mock_rep3) %>% separate(col = window, into=c("Chr", "range"), sep=":", remove=TRUE) %>% separate(col=range, into=c("Window", "windowmax"), sep="-", remove=TRUE) %>% dplyr::filter(Chr=="Chr4", Window>=gene_start | Window>gene_start+windowsize, windowmax<=gene_end | windowmax <gene_end+windowsize) %>% dplyr::mutate(normalised_col_kv_rep1=col_kv_4h_rep1/mean(col_kv_4h_rep1), normalised_col_kv_rep2=col_kv_4h_rep2/mean(col_kv_4h_rep2), normalised_col_kv_rep3=col_kv_4h_rep3/mean(col_kv_4h_rep3)) %>% dplyr::mutate(col_kv_4h=(normalised_col_kv_rep1 + normalised_col_kv_rep2 + normalised_col_kv_rep3)/3) %>%  dplyr::mutate(normalised_mock_rep1=col_mock_rep1/mean(col_mock_rep1), normalised_mock_rep2=col_mock_rep2/mean(col_mock_rep2), normalised_mock_rep3=col_mock_rep3/mean(col_mock_rep3)) %>% dplyr::mutate(col_mock=(normalised_mock_rep1 + normalised_mock_rep2 + normalised_mock_rep3)/3) %>% dplyr::select(Chr,Window, windowmax, col_kv_4h, col_mock)
-```
-
-Let's compare the mean for col_a4, col_kv and col_mock
-
-```{r echo=, fig.height=30, fig.width=40}
-AT4G05320 = dplyr::left_join(data_a4_mock, data_kv_mock) %>% mutate(col_a4_mock_ratio = col_a4_4h/col_mock, col_kv_mock_ratio = col_kv_4h/col_mock) %>% reshape::melt(measure.vars=c("col_a4_4h", "col_mock", "col_kv_4h")) %>% rename(Samples=variable, Ratio=value)
-ggplot(AT4G05320, aes(Window, Ratio, color=Samples)) + geom_point(size=3) + geom_line(data=AT4G05320, aes(group=Samples))  + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
-
-
-Now, let's plot the ratio of col_a4/col_mock and col_kv/col_mock
-
-```{r echo = TRUE}
-
-AT4G05320 <- dplyr::left_join(data_a4_mock, data_kv_mock) %>% mutate(col_a4_mock_ratio = col_a4_4h/col_mock, col_kv_mock_ratio = col_kv_4h/col_mock) %>% select(Chr, Window, windowmax, col_a4_mock_ratio, col_kv_mock_ratio) %>% reshape::melt(measure.vars=c("col_a4_mock_ratio", "col_kv_mock_ratio")) %>% dplyr::rename(Samples=variable, Ratios=value)
-
-
-ggplot(AT4G05320, aes(Window, Ratios, color=Samples)) + geom_point(size=3) + geom_line(data=AT4G05320, aes(group=Samples)) + theme(axis.text.y=element_text(size=16), axis.text.x=element_text(angle=90, size=8), axis.line = element_line(size=1, colour="darkblue"))
-```
