@@ -1,5 +1,5 @@
 ---
-title: "atacr_test"
+title: "atacR_Capseq_Analysis"
 author: "Ram Krishna Shrestha"
 date: "18 July 2018"
 output: html_document
@@ -35,7 +35,7 @@ counts <- make_counts("data/bait_regions_with_gene_names.gff", "data/sample_trea
 
 ## Save the counts
 ```{r echo=TRUE}
-saveRDS(counts, file="results/my_output_file.rds")
+saveRDS(counts, file="results/Counts.rds")
 ```
 
 ## Summarising the count data
@@ -68,9 +68,9 @@ sample_pca_plot(counts)
 ```
 
 
-# Control gene Normalisation
+## Control gene Normalisation
 
-## Finding and applying internal scaling factor using Goodness of Fit (GoF) Normalisation
+### Finding and applying internal scaling factor using Goodness of Fit (GoF) Normalisation
 
 ```{r}
 gof_norm_factors <- get_GoF_factors(counts)
@@ -84,11 +84,12 @@ plot_counts(counts, which = "normalised_counts")
 ```
 
 
-Plotting the distribution of ‘control’ windows against the rest using
+Plotting the distribution of ‘control’ windows against the rest using auto controls
 
 ```{r echo = TRUE}
 
 auto_controls <- find_controls_by_GoF(counts)
+head(auto_controls)
 plot_GoF(counts, controls = auto_controls)
 ```
 
@@ -105,11 +106,11 @@ Spikier mean Goodness of Fit. The Non-control data has a long tail distribution 
 #bootstrap_result_col_a4_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_a4_4h", treatment_b = "col_mock", iterations = 100000, fdr_level = 0.01)
 #head(bootstrap_result_col_a4_mock_normalised)
 
-bootstrap_result_of_col_normalised_multiclass <- estimate_fdr_multiclass(counts, which = "normalised_counts", common_control = "col_mock", iterations = 100, fdr_level = 0.01)
+bootstrap_result_of_col_normalised_multiclass <- estimate_fdr_multiclass(counts, which = "normalised_counts", common_control = "control", iterations = 100, fdr_level = 0.01)
 head(bootstrap_result_of_col_normalised_multiclass)
 
 # Writing data to a file
-write.csv(bootstrap_result_of_col_normalised_multiclass, file="results/bootstrap_result_col_a4_mock_normalised_multiclass.csv", row.names = TRUE)
+write.csv(bootstrap_result_of_col_normalised_multiclass, file="results/bootstrap_result_col_a4_mock_normalised_multiclass_with_gdna_control.csv", row.names = TRUE)
 #bayesfactor_result_col_a4_mock_normalised <- estimate_bayes_factor(counts, treatment_a = "col_a4_4h", treatment_b =  "col_mock", which = "normalised_counts", factor = 2.0)
 #head(bayesfactor_result_col_a4_mock_normalised)
 ```
@@ -118,11 +119,11 @@ Here a = treatment sample, b = control sample
 ### Bayes Factor Analysis
 
 ```{r}
-bayesfactor_result_of_col_normalised_multiclass <- estimate_bayes_factor_multiclass(counts, common_control = "col_mock",  factor = 2.0, which = "normalised_counts")
+bayesfactor_result_of_col_normalised_multiclass <- estimate_bayes_factor_multiclass(counts, common_control = "control",  factor = 2.0, which = "normalised_counts")
 head(bayesfactor_result_of_col_normalised_multiclass)
 
 #Writing data to a file
-write.csv(bayesfactor_result_of_col_normalised_multiclass, file="results/bayesfactor_result_of_col_normalised_multiclass.csv", row.names = TRUE)
+write.csv(bayesfactor_result_of_col_normalised_multiclass, file="results/bayesfactor_result_of_col_normalised_multiclass_with_gdna_control.csv", row.names = TRUE)
 #bootstrap_result_col_kv_mock_normalised <- estimate_fdr(counts, which = "normalised_counts", treatment_a =  "col_kv_4h", treatment_b = "col_mock", iterations = 100000, fdr_level = 0.01)
 #head(bootstrap_result_col_kv_mock_normalised)
 ```
