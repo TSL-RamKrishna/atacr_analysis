@@ -61,7 +61,14 @@ A coverage threshold plot can reveal the number of windows that have coverage lo
 windows_below_coverage_threshold_plot(counts)
 ```
 
+## Sample Correlation
+
+```{r}
+sample_correlation_plot(counts)
+```
+
 PCA plots can be used to check sample reproducibility. We have replicates of each sample. With a PCA plot, the similarity/dissimilarity of the replicates can be examined.
+
 
 ```{r echo = TRUE}
 sample_pca_plot(counts)
