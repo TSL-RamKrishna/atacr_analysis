@@ -36,3 +36,7 @@ Git repo updated.
 ## 04 Sept 2018
 
 Re run Rmarkdown code for analysis that include Goodness of Fit analysis and differential expression from atacR tutorial. Differential expression analysis using t-test and Bayes Factor Analysis were done. Results saved in files.
+
+## 17 Sept 2018
+
+Generated bed files from differential expressed results using bayes factor analysis. Results pushed to github repo.
