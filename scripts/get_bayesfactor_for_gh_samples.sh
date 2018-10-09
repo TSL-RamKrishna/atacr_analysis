@@ -1,4 +1,4 @@
 awk -F "," '{print $2, $9, $10, $11}' ../results/bayesfactor_result_gh_normalised_multiclass_with_gdna_control.csv | sed 's/"//g;s/[:-]/ /g' | grep gh_untreated | awk '{print $1, $2, $3, $4}' > ../results/gh_untreated.bed
-awk -F "," '{print $2, $9, $10, $11}' ../results/bayesfactor_result_gh_normalised_multiclass_with_gdna_control.csv | sed 's/"//g;s/[:-]/ /g' | grep gh_mock | awk '{print $1, $2, $3, $4}' > ../results/gh_mock_bed
+awk -F "," '{print $2, $9, $10, $11}' ../results/bayesfactor_result_gh_normalised_multiclass_with_gdna_control.csv | sed 's/"//g;s/[:-]/ /g' | grep gh_mock | awk '{print $1, $2, $3, $4}' > ../results/gh_mock.bed
 awk -F "," '{print $2, $9, $10, $11}' ../results/bayesfactor_result_gh_normalised_multiclass_with_gdna_control.csv | sed 's/"//g;s/[:-]/ /g' | grep gh_a4_h4 | awk '{print $1, $2, $3, $4}' > ../results/gh_a4_h4.bed
 awk -F "," '{print $2, $9, $10, $11}' ../results/bayesfactor_result_gh_normalised_multiclass_with_gdna_control.csv | sed 's/"//g;s/[:-]/ /g' | grep gh_kv_4h | awk '{print $1, $2, $3, $4}' > ../results/gh_kv_4h.bed
